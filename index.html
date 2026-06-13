@@ -119,7 +119,7 @@
 
         <div class="results-header">
           <h2>Your Risk Assessment</h2>
-          <p class="results-sub">Based on RTMC 2023 South African road safety statistics</p>
+          <p class="results-sub">Based on RTMC 2025 South African road safety statistics</p>
         </div>
 
         <div class="results-grid">
@@ -166,6 +166,64 @@
         <div class="factor-section">
           <h3>What's driving your risk?</h3>
           <div class="factor-list" id="factorList"></div>
+        </div>
+
+        <!-- 2023 vs 2025 Comparison -->
+        <div class="comparison-section">
+          <h3>How has the data changed? 2023 vs 2025</h3>
+          <p class="comparison-intro">Your result uses the most recent 2025 RTMC data. Below shows how the underlying risk factors have shifted since 2023 — and what drove the change in your premium estimate.</p>
+
+          <div class="comparison-your-result">
+            <div class="your-result-row">
+              <div class="your-result-item">
+                <span class="yr-label">2023 Model</span>
+                <span class="yr-score" id="score2023">--</span>
+                <span class="yr-sub">risk score</span>
+              </div>
+              <div class="yr-arrow">→</div>
+              <div class="your-result-item">
+                <span class="yr-label">2025 Model</span>
+                <span class="yr-score highlight" id="score2025">--</span>
+                <span class="yr-sub">risk score</span>
+              </div>
+              <div class="yr-arrow">→</div>
+              <div class="your-result-item">
+                <span class="yr-label">Change</span>
+                <span class="yr-score" id="scoreDelta">--</span>
+                <span class="yr-sub">in your score</span>
+              </div>
+            </div>
+            <div class="your-result-row">
+              <div class="your-result-item">
+                <span class="yr-label">2023 Premium</span>
+                <span class="yr-premium" id="premium2023">--</span>
+              </div>
+              <div class="yr-arrow">→</div>
+              <div class="your-result-item">
+                <span class="yr-label">2025 Premium</span>
+                <span class="yr-premium highlight" id="premium2025">--</span>
+              </div>
+              <div class="yr-arrow">→</div>
+              <div class="your-result-item">
+                <span class="yr-label">Change</span>
+                <span class="yr-premium" id="premiumDelta">--</span>
+              </div>
+            </div>
+          </div>
+
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Risk Factor</th>
+                <th>2023 Data</th>
+                <th>2025 Data</th>
+                <th>Change</th>
+                <th>Impact on Your Premium</th>
+              </tr>
+            </thead>
+            <tbody id="comparisonTableBody">
+            </tbody>
+          </table>
         </div>
 
         <!-- Disclaimer -->
