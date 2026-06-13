@@ -295,10 +295,8 @@ function calculateRisk() {
   const premiumHigh = Math.round(estPremium * 1.15 / 50) * 50;
 
   // 8. Render results
-  renderResults({
-    compositeScore,
-    band, bandClass,
-    premiumLow, premiumHigh,
+  const result2025 = {
+    compositeScore, band, bandClass, premiumLow, premiumHigh,
     factors: [
       { name: "Age",             score: ageScore,      value: `${age} yrs (${getAgeBand(age)})` },
       { name: "Gender",          score: genderScore,   value: gender.charAt(0).toUpperCase() + gender.slice(1) },
@@ -307,7 +305,13 @@ function calculateRisk() {
       { name: "Weekly km",       score: kmScore,       value: KM_LABEL[km] },
       { name: "Weekend driving", score: weekendScore,  value: weekend === "yes" ? "Yes, regularly" : weekend === "sometimes" ? "Sometimes" : "Rarely / Never" },
     ]
-  });
+  };
+
+  renderResults(result2025);
+
+  // 9. Calculate and render 2023 vs 2025 comparison
+  const result2023 = calculateScore2023(age, gender, province, vehicle, km, weekend);
+  renderComparison({ age, gender, province, vehicle, km, weekend }, result2025, result2023);
 }
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
@@ -373,4 +377,192 @@ function renderResults({ compositeScore, band, bandClass, premiumLow, premiumHig
       bar.style.width = bar.dataset.width;
     });
   }, 200);
+}
+
+// ─── 2023 DATA (for comparison) ──────────────────────────────────────────────
+// Source: RTMC State of Road Safety Report 2023 (Jan–Dec 2023)
+// These are the original values used in the first version of this model
+
+const AGE_FATALITY_2023 = {
+  "00-04": 3.9,  "05-09": 3.8,  "10-14": 2.5,  "15-19": 3.9,
+  "20-24": 7.0,  "25-29": 12.0, "30-34": 14.5,  "35-39": 14.7,
+  "40-44": 11.0, "45-49": 7.6,  "50-54": 5.6,   "55-59": 5.0,
+  "60-64": 3.5,  "65-69": 2.8,  "70-74": 1.8,   "75-79": 1.0,  "80+": 0.8,
+};
+
+const PROVINCE_FATALITIES_2023 = {
+  GP: 2514, KZN: 2229, EC: 1390, LP: 1362,
+  MP: 1183, WC: 1371,  NW: 752,  FS: 661,  NC: 391,
+};
+
+// 2023 gender: Male 76.5%, Female 19.6%
+// Male relative risk 2023: (76.5/52) / (19.6/48) = 1.471/0.408 = 3.61
+const GENDER_MULT_2023 = { male: 3.61, female: 1.0 };
+
+// 2023 weekend: Sat 24.3% + Sun 21.4% = 45.7% → same multiplier structure
+const WEEKEND_MULT_2023 = { yes: 1.4, sometimes: 1.15, no: 1.0 };
+
+// 2023 base premiums (slightly lower)
+const BASE_PREMIUM_2023 = {
+  motorcar: 950, bakkie: 1100, motorcycle: 650,
+  minibus: 1800, bus: 4500, truck: 5500,
+};
+
+function getAgeMultiplier2023(age) {
+  const band = getAgeBand(age);
+  const fatPct = AGE_FATALITY_2023[band] || AGE_FATALITY_2023["80+"];
+  const minFat = 0.8;
+  return fatPct / minFat;
+}
+
+function getProvinceMultiplier2023(province) {
+  const rate = PROVINCE_FATALITIES_2023[province] / PROVINCE_VEHICLE_SHARE[province];
+  const allRates = Object.keys(PROVINCE_FATALITIES_2023).map(p =>
+    PROVINCE_FATALITIES_2023[p] / PROVINCE_VEHICLE_SHARE[p]
+  );
+  const minRate = Math.min(...allRates);
+  return rate / minRate;
+}
+
+function calculateScore2023(age, gender, province, vehicle, km, weekend) {
+  const ageMult      = getAgeMultiplier2023(age);
+  const genderMult   = GENDER_MULT_2023[gender];
+  const provinceMult = getProvinceMultiplier2023(province);
+  const vehicleMult  = VEHICLE_MULTIPLIER[vehicle];
+  const kmMult       = KM_MULTIPLIER[km];
+  const weekendMult  = WEEKEND_MULT_2023[weekend];
+
+  const AGE_MAX_23      = getAgeMultiplier2023(35);
+  const GENDER_MAX_23   = 3.61;
+  const PROVINCE_MAX_23 = getProvinceMultiplier2023("GP"); // highest in 2023
+  const VEHICLE_MAX_23  = 4.5;
+  const KM_MAX_23       = 1.9;
+  const WEEKEND_MAX_23  = 1.4;
+
+  const ageScore      = Math.min((ageMult / AGE_MAX_23) * 100, 100);
+  const genderScore   = Math.min((genderMult / GENDER_MAX_23) * 100, 100);
+  const provinceScore = Math.min((provinceMult / PROVINCE_MAX_23) * 100, 100);
+  const vehicleScore  = Math.min((vehicleMult / VEHICLE_MAX_23) * 100, 100);
+  const kmScore       = Math.min((kmMult / KM_MAX_23) * 100, 100);
+  const weekendScore  = Math.min((weekendMult / WEEKEND_MAX_23) * 100, 100);
+
+  const composite = Math.round(
+    ageScore * WEIGHTS.age + genderScore * WEIGHTS.gender +
+    provinceScore * WEIGHTS.province + vehicleScore * WEIGHTS.vehicle +
+    kmScore * WEIGHTS.km + weekendScore * WEIGHTS.weekend
+  );
+
+  const premMult  = 0.4 + (composite / 100) * 2.2;
+  const base      = BASE_PREMIUM_2023[vehicle];
+  const est       = base * premMult;
+  const premLow   = Math.round(est * 0.85 / 50) * 50;
+  const premHigh  = Math.round(est * 1.15 / 50) * 50;
+
+  return {
+    composite,
+    premLow, premHigh,
+    factors: {
+      age: { score: ageScore, raw: AGE_FATALITY_2023[getAgeBand(age)] },
+      gender: { score: genderScore, raw: GENDER_MULT_2023[gender] },
+      province: { score: provinceScore, raw: (PROVINCE_FATALITIES_2023[province] / PROVINCE_VEHICLE_SHARE[province]).toFixed(1) },
+      vehicle: { score: vehicleScore, raw: VEHICLE_MULTIPLIER[vehicle] },
+      km: { score: kmScore, raw: KM_MULTIPLIER[km] },
+      weekend: { score: weekendScore, raw: WEEKEND_MULT_2023[weekend] },
+    }
+  };
+}
+
+// ─── RENDER COMPARISON TABLE ─────────────────────────────────────────────────
+function renderComparison(inputs, result2025, result2023) {
+  const { age, gender, province, vehicle, km, weekend } = inputs;
+
+  // Your result summary
+  document.getElementById("score2023").textContent   = result2023.composite;
+  document.getElementById("score2025").textContent   = result2025.compositeScore;
+  const scoreDiff = result2025.compositeScore - result2023.composite;
+  const scoreDeltaEl = document.getElementById("scoreDelta");
+  scoreDeltaEl.textContent = (scoreDiff > 0 ? "+" : "") + scoreDiff;
+  scoreDeltaEl.className   = `yr-score ${scoreDiff > 0 ? "change-up" : scoreDiff < 0 ? "change-down" : "change-neutral"}`;
+
+  document.getElementById("premium2023").textContent = `R${result2023.premLow.toLocaleString()}–${result2023.premHigh.toLocaleString()}`;
+  document.getElementById("premium2025").textContent = `R${result2025.premiumLow.toLocaleString()}–${result2025.premiumHigh.toLocaleString()}`;
+
+  const premMidDiff = Math.round(
+    ((result2025.premiumLow + result2025.premiumHigh) / 2) -
+    ((result2023.premLow + result2023.premHigh) / 2)
+  );
+  const premDeltaEl = document.getElementById("premiumDelta");
+  premDeltaEl.textContent = (premMidDiff > 0 ? "+R" : "-R") + Math.abs(premMidDiff).toLocaleString() + "/mo";
+  premDeltaEl.className   = `yr-premium ${premMidDiff > 0 ? "change-up" : premMidDiff < 0 ? "change-down" : "change-neutral"}`;
+
+  // Comparison table rows
+  const ageBand = getAgeBand(age);
+  const rows = [
+    {
+      factor: "Age fatality rate",
+      val2023: `${AGE_FATALITY_2023[ageBand]}% (${ageBand})`,
+      val2025: `${AGE_FATALITY_2025[ageBand]}% (${ageBand})`,
+      diff: AGE_FATALITY_2025[ageBand] - AGE_FATALITY_2023[ageBand],
+      unit: "%",
+      impact: AGE_FATALITY_2025[ageBand] > AGE_FATALITY_2023[ageBand] ? "higher" : AGE_FATALITY_2025[ageBand] < AGE_FATALITY_2023[ageBand] ? "lower" : "neutral",
+      note: AGE_FATALITY_2025[ageBand] > AGE_FATALITY_2023[ageBand] ? "↑ Pushes premium up" : "↓ Pushes premium down",
+    },
+    {
+      factor: "Gender fatality split (male)",
+      val2023: "76.5% of fatalities",
+      val2025: "75.7% of fatalities",
+      diff: 75.7 - 76.5,
+      unit: "%",
+      impact: "lower",
+      note: "↓ Slightly lower male risk recorded",
+    },
+    {
+      factor: "Province fatality share",
+      val2023: `${(PROVINCE_FATALITIES_2023[province] / Object.values(PROVINCE_FATALITIES_2023).reduce((a,b)=>a+b,0) * 100).toFixed(2)}% of SA fatalities`,
+      val2025: `${PROVINCE_FATALITY_PCT_2025[province]}% of SA fatalities`,
+      diff: PROVINCE_FATALITY_PCT_2025[province] - (PROVINCE_FATALITIES_2023[province] / Object.values(PROVINCE_FATALITIES_2023).reduce((a,b)=>a+b,0) * 100),
+      unit: "%",
+      impact: PROVINCE_FATALITY_PCT_2025[province] > (PROVINCE_FATALITIES_2023[province] / Object.values(PROVINCE_FATALITIES_2023).reduce((a,b)=>a+b,0) * 100) ? "higher" : "lower",
+      note: PROVINCE_FATALITY_PCT_2025[province] > (PROVINCE_FATALITIES_2023[province] / Object.values(PROVINCE_FATALITIES_2023).reduce((a,b)=>a+b,0) * 100) ? "↑ Province share increased" : "↓ Province share decreased",
+    },
+    {
+      factor: "Weekend crash share",
+      val2023: "45.7% of crashes (Sat+Sun)",
+      val2025: "45.6% of crashes (Sat+Sun)",
+      diff: -0.1,
+      unit: "%",
+      impact: "neutral",
+      note: "→ Essentially unchanged",
+    },
+    {
+      factor: "Base premium (motorcar)",
+      val2023: "R950/month benchmark",
+      val2025: "R1,050/month benchmark",
+      diff: 100,
+      unit: "R",
+      impact: "higher",
+      note: "↑ Market premiums rose ~10% 2023–2025",
+    },
+  ];
+
+  const tbody = document.getElementById("comparisonTableBody");
+  tbody.innerHTML = "";
+  rows.forEach(row => {
+    const diffStr = row.unit === "%" 
+      ? `${row.diff > 0 ? "+" : ""}${row.diff.toFixed(2)}%`
+      : `${row.diff > 0 ? "+" : ""}R${Math.abs(row.diff).toLocaleString()}`;
+    const diffClass = row.diff > 0 ? "change-up" : row.diff < 0 ? "change-down" : "change-neutral";
+    const impactClass = `impact-tag impact-${row.impact}`;
+    const impactText  = row.impact === "higher" ? "↑ Higher premium" : row.impact === "lower" ? "↓ Lower premium" : "→ No change";
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.factor}</td>
+        <td>${row.val2023}</td>
+        <td>${row.val2025}</td>
+        <td class="${diffClass}">${diffStr}</td>
+        <td><span class="${impactClass}">${impactText}</span><br><small style="color:var(--ink-faint);font-size:0.72rem;">${row.note}</small></td>
+      </tr>
+    `;
+  });
 }
