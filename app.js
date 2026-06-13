@@ -380,29 +380,30 @@ function renderResults({ compositeScore, band, bandClass, premiumLow, premiumHig
 }
 
 // ─── 2023 DATA (for comparison) ──────────────────────────────────────────────
-// Source: RTMC State of Road Safety Report 2023 (Jan–Dec 2023)
-// These are the original values used in the first version of this model
+// Source: RTMC 2025 Report chart — "%Distribution of road fatalities per age group: 2023-2025"
+// 2023 column exact values as printed on chart
 
 const AGE_FATALITY_2023 = {
-  "00-04": 3.9,  "05-09": 3.8,  "10-14": 2.5,  "15-19": 3.9,
-  "20-24": 7.0,  "25-29": 12.0, "30-34": 14.5,  "35-39": 14.7,
-  "40-44": 11.0, "45-49": 7.6,  "50-54": 5.6,   "55-59": 5.0,
-  "60-64": 3.5,  "65-69": 2.8,  "70-74": 1.8,   "75-79": 1.0,  "80+": 0.8,
+  "00-04": 3.81, "05-09": 3.72, "10-14": 2.63, "15-19": 3.90,
+  "20-24": 7.06, "25-29": 11.91, "30-34": 14.36, "35-39": 14.59,
+  "40-44": 11.03, "45-49": 7.40, "50-54": 5.59, "55-59": 5.10,
+  "60-64": 3.26, "65-69": 2.56, "70-74": 1.51, "75-79": 0.88, "80+": 0.69,
 };
 
+// 2023 province fatalities (exact from RTMC 2023 report bar chart)
 const PROVINCE_FATALITIES_2023 = {
   GP: 2514, KZN: 2229, EC: 1390, LP: 1362,
   MP: 1183, WC: 1371,  NW: 752,  FS: 661,  NC: 391,
 };
 
-// 2023 gender: Male 76.5%, Female 19.6%
-// Male relative risk 2023: (76.5/52) / (19.6/48) = 1.471/0.408 = 3.61
+// 2023 gender: Male 76.5%, Female 19.6% (exact from RTMC 2023 Figure 21)
+// Male relative risk: (76.5/52) / (19.6/48) = 1.471/0.408 = 3.61
 const GENDER_MULT_2023 = { male: 3.61, female: 1.0 };
 
-// 2023 weekend: Sat 24.3% + Sun 21.4% = 45.7% → same multiplier structure
+// 2023 weekend: Sat 24.3% + Sun 21.4% = 45.7% of crashes
 const WEEKEND_MULT_2023 = { yes: 1.4, sometimes: 1.15, no: 1.0 };
 
-// 2023 base premiums (slightly lower)
+// 2023 base premiums
 const BASE_PREMIUM_2023 = {
   motorcar: 950, bakkie: 1100, motorcycle: 650,
   minibus: 1800, bus: 4500, truck: 5500,
@@ -410,8 +411,9 @@ const BASE_PREMIUM_2023 = {
 
 function getAgeMultiplier2023(age) {
   const band = getAgeBand(age);
-  const fatPct = AGE_FATALITY_2023[band] || AGE_FATALITY_2023["80+"];
-  const minFat = 0.8;
+  const fatPct = AGE_FATALITY_2023[band] !== undefined ? AGE_FATALITY_2023[band] : AGE_FATALITY_2023["80+"];
+  // Normalise relative to lowest risk group (80+ = 0.69%)
+  const minFat = 0.69;
   return fatPct / minFat;
 }
 
@@ -420,6 +422,7 @@ function getProvinceMultiplier2023(province) {
   const allRates = Object.keys(PROVINCE_FATALITIES_2023).map(p =>
     PROVINCE_FATALITIES_2023[p] / PROVINCE_VEHICLE_SHARE[p]
   );
+  // Minimum rate = lowest risk province (GP has the most vehicles so lowest rate)
   const minRate = Math.min(...allRates);
   return rate / minRate;
 }
@@ -432,9 +435,15 @@ function calculateScore2023(age, gender, province, vehicle, km, weekend) {
   const kmMult       = KM_MULTIPLIER[km];
   const weekendMult  = WEEKEND_MULT_2023[weekend];
 
-  const AGE_MAX_23      = getAgeMultiplier2023(35);
+  // Max values must match the same methodology as 2023 main model
+  // Peak age in 2023 data is 35-39 (14.59%)
+  const AGE_MAX_23      = getAgeMultiplier2023(37);
   const GENDER_MAX_23   = 3.61;
-  const PROVINCE_MAX_23 = getProvinceMultiplier2023("GP"); // highest in 2023
+  // Highest province rate in 2023 (by fatalities/vehicle share)
+  const allProvinceRates23 = Object.keys(PROVINCE_FATALITIES_2023).map(p =>
+    getProvinceMultiplier2023(p)
+  );
+  const PROVINCE_MAX_23 = Math.max(...allProvinceRates23);
   const VEHICLE_MAX_23  = 4.5;
   const KM_MAX_23       = 1.9;
   const WEEKEND_MAX_23  = 1.4;
