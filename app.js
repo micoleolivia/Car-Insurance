@@ -1,7 +1,8 @@
 /**
  * RiskView SA — Car Insurance Risk Estimator
  * --------------------------------------------------
- * Data source: RTMC State of Road Safety in South Africa, Jan–Dec 2023
+ * Data source: RTMC State of Road Safety in South Africa, January–March 2025
+ * (covering 2024 and 2025 data, published 2025)
  * Methodology: Multiplicative relative risk scoring using fatality distributions
  * as proxies for accident risk, adjusted for population exposure.
  *
@@ -11,31 +12,57 @@
  */
 
 // ─── DATA: AGE RISK ────────────────────────────────────────────────────────
-// Source: RTMC 2023, Figure 20 — Percentage distribution of fatalities per age group
-// Relative risk = fatality % / population % for that age group
-// Population % from RTMC Figure 20 (green line)
-// We use the raw fatality % as a proxy and normalise relative to the lowest-risk group
+// Source: RTMC 2025 Report — "%Distribution of road fatalities per age group: 2023-2025"
+// 2025 exact values from chart (most recent year used as primary)
+// Population % (AGE column) also extracted from same chart for exposure adjustment
 
-const AGE_FATALITY = {
-  "16-19": 3.9,
-  "20-24": 7.0,
-  "25-29": 12.0,
-  "30-34": 14.5,
-  "35-39": 14.7,
-  "40-44": 11.0,
-  "45-49": 7.6,
-  "50-54": 5.6,
-  "55-59": 5.0,
-  "60-64": 3.5,
-  "65-69": 2.8,
+const AGE_FATALITY_2025 = {
+  "00-04": 3.52,
+  "05-09": 3.30,
+  "10-14": 2.18,
+  "15-19": 3.57,
+  "20-24": 6.95,
+  "25-29": 10.50,
+  "30-34": 14.07,
+  "35-39": 14.20,
+  "40-44": 11.63,
+  "45-49": 7.91,
+  "50-54": 6.95,
+  "55-59": 5.29,
+  "60-64": 4.26,
+  "65-69": 2.25,
+  "70-74": 1.59,
+  "75-79": 1.11,
+  "80+":   0.74,
+};
+
+// Population share by age group (from AGE line in RTMC 2025 chart)
+const AGE_POPULATION = {
+  "00-04": 9.5,
+  "05-09": 8.9,
+  "10-14": 9.1,
+  "15-19": 8.7,
+  "20-24": 7.5,
+  "25-29": 8.0,
+  "30-34": 8.9,
+  "35-39": 8.8,
+  "40-44": 7.1,
+  "45-49": 5.5,
+  "50-54": 4.5,
+  "55-59": 3.7,
+  "60-64": 3.2,
+  "65-69": 2.5,
   "70-74": 1.8,
-  "75-79": 1.0,
-  "80+":   0.8,
+  "75-79": 1.2,
+  "80+":   1.0,
 };
 
 // Map user age (integer) to age band
 function getAgeBand(age) {
-  if (age < 20)  return "16-19";
+  if (age < 5)   return "00-04";
+  if (age < 10)  return "05-09";
+  if (age < 15)  return "10-14";
+  if (age < 20)  return "15-19";
   if (age < 25)  return "20-24";
   if (age < 30)  return "25-29";
   if (age < 35)  return "30-34";
@@ -51,30 +78,35 @@ function getAgeBand(age) {
   return "80+";
 }
 
-// Normalise age fatality % relative to lowest risk group (80+ = 0.8%)
-// This gives us a relative risk multiplier
+// Exposure-adjusted age risk rate = fatality% / population%
+// Normalised relative to the lowest-risk group
 function getAgeMultiplier(age) {
   const band = getAgeBand(age);
-  const fatPct = AGE_FATALITY[band];
-  const minFat = 0.8; // 80+ group
-  return fatPct / minFat; // e.g. 30-34 = 14.5/0.8 = 18.1x relative risk
+  const rate = AGE_FATALITY_2025[band] / AGE_POPULATION[band];
+
+  // Find minimum rate across all bands for normalisation
+  const allRates = Object.keys(AGE_FATALITY_2025).map(b =>
+    AGE_FATALITY_2025[b] / AGE_POPULATION[b]
+  );
+  const minRate = Math.min(...allRates);
+  return rate / minRate;
 }
 
 // ─── DATA: PROVINCE RISK ────────────────────────────────────────────────────
-// Source: RTMC 2023 — Distribution of Fatalities per Province (exact bar chart values)
-// Adjusted for registered vehicles per province (RTMC 2023, Figure 6)
-// Vehicle share proxy: GP=38.37%, WC=16.31%, KZN=13.43%, remaining split ~equally
+// Source: RTMC 2025 — "%Distribution of fatalities per province 2024-2025"
+// Using 2025 fatality percentages (exact from chart)
+// Adjusted for registered vehicle share per province (RTMC 2023 Figure 6 — most recent available)
 
-const PROVINCE_FATALITIES = {
-  GP:  2514,
-  KZN: 2229,
-  EC:  1390,
-  LP:  1362,
-  MP:  1183,
-  WC:  1371,
-  NW:  752,
-  FS:  661,
-  NC:  391,
+const PROVINCE_FATALITY_PCT_2025 = {
+  GP:  19.99,
+  KZN: 18.37,
+  LP:  12.02,
+  EC:  11.43,
+  WC:  11.14,
+  MP:  10.55,
+  NW:  7.51,
+  FS:  6.06,
+  NC:  2.92,
 };
 
 // Registered vehicle share per province (RTMC 2023 Figure 6)
@@ -90,36 +122,35 @@ const PROVINCE_VEHICLE_SHARE = {
   NC:  0.0230,
 };
 
-// Rate = fatalities / vehicle share → normalised relative to lowest (NC)
+// Rate = fatality% / vehicle share → exposure-adjusted risk per province
+// Normalised relative to lowest rate province
 function getProvinceMultiplier(province) {
-  const fat = PROVINCE_FATALITIES[province];
-  const veh = PROVINCE_VEHICLE_SHARE[province];
-  const rate = fat / veh;
+  const rate = PROVINCE_FATALITY_PCT_2025[province] / PROVINCE_VEHICLE_SHARE[province];
 
-  // Calculate all rates to normalise
-  const allRates = Object.keys(PROVINCE_FATALITIES).map(p =>
-    PROVINCE_FATALITIES[p] / PROVINCE_VEHICLE_SHARE[p]
+  const allRates = Object.keys(PROVINCE_FATALITY_PCT_2025).map(p =>
+    PROVINCE_FATALITY_PCT_2025[p] / PROVINCE_VEHICLE_SHARE[p]
   );
   const minRate = Math.min(...allRates);
   return rate / minRate;
 }
 
 // ─── DATA: GENDER RISK ──────────────────────────────────────────────────────
-// Source: RTMC 2023, Figure 21 — exact values from chart table
-// Male: 76.5%, Female: 19.6% of fatalities
-// SA driving population is roughly 52% male / 48% female
-// Male relative risk = (76.5/52) / (19.6/48) = 1.47/0.408 = 3.6x relative to female
+// Source: RTMC 2025 — "%Distribution of Fatalities per Gender: 2024-2025"
+// 2025 exact values: Male 75.7%, Female 21.4%
+// SA driving population approximately 52% male / 48% female
+// Male relative risk = (75.7/52) / (21.4/48) = 1.456 / 0.446 = 3.26x relative to female
 
 const GENDER_MULTIPLIER = {
-  male:   3.6,
+  male:   3.26,
   female: 1.0,
 };
 
 // ─── DATA: VEHICLE TYPE RISK ────────────────────────────────────────────────
-// Source: RTMC 2023 Table 2 — registered vehicles by type
-// Higher risk vehicles: motorcycles (high fatality rate per km),
-// minibuses (taxi industry crash rate), trucks (severity)
-// Motorcars = baseline reference
+// Source: RTMC 2023 Table 2 (most recent vehicle registration table available)
+// Relative risk multipliers anchored to motorcars as baseline (1.0)
+// Motorcycle risk from international literature (4-5x higher fatality rate per km)
+// Minibus/taxi risk reflects SA taxi industry crash profile
+// Truck and bus risk reflects severity of heavy vehicle crashes
 
 const VEHICLE_MULTIPLIER = {
   motorcar:   1.0,
@@ -140,7 +171,8 @@ const VEHICLE_LABEL = {
 };
 
 // ─── DATA: EXPOSURE (KM DRIVEN) ─────────────────────────────────────────────
-// More km = more exposure = more risk. Linear proxy.
+// More km = more exposure = proportionally more risk
+// Multipliers reflect linear exposure scaling relative to 100-300km/week baseline
 
 const KM_MULTIPLIER = {
   low:       0.6,
@@ -157,8 +189,10 @@ const KM_LABEL = {
 };
 
 // ─── DATA: WEEKEND DRIVING ──────────────────────────────────────────────────
-// Source: RTMC 2023 — Saturday 24.3% + Sunday 21.4% = 45.7% of crashes on weekends
-// Weekend days = 2/7 = 28.6% of week → weekend crash rate is 45.7/28.6 = 1.6x weekday
+// Source: RTMC 2025 — "%Distribution of fatal crashes per day of the week 2024-2025"
+// 2025: Saturday 22.8% + Sunday 22.8% = 45.6% of crashes on weekends
+// Weekend = 2/7 = 28.6% of the week
+// Weekend crash rate = 45.6% / 28.6% = 1.59x weekday rate
 
 const WEEKEND_MULTIPLIER = {
   yes:       1.4,
@@ -167,7 +201,8 @@ const WEEKEND_MULTIPLIER = {
 };
 
 // ─── SCORING WEIGHTS ────────────────────────────────────────────────────────
-// These weights determine contribution to final composite score
+// Weights reflect relative actuarial importance of each factor
+// Age and province are the dominant predictors in SA road fatality data
 const WEIGHTS = {
   age:      0.30,
   gender:   0.20,
@@ -185,15 +220,15 @@ const PROVINCE_NAME = {
 };
 
 // ─── PREMIUM BASE RATES (ZAR/month) ─────────────────────────────────────────
-// Indicative market benchmarks for comprehensive cover in SA (2023/24)
+// Indicative market benchmarks for comprehensive cover in SA (2024/25)
 // Source: Hippo.co.za market averages and industry publications
 const BASE_PREMIUM = {
-  motorcar:   950,
-  bakkie:     1100,
-  motorcycle: 650,
-  minibus:    1800,
-  bus:        4500,
-  truck:      5500,
+  motorcar:   1050,
+  bakkie:     1200,
+  motorcycle: 700,
+  minibus:    1950,
+  bus:        4800,
+  truck:      5800,
 };
 
 // ─── MAIN CALCULATION ────────────────────────────────────────────────────────
@@ -221,10 +256,9 @@ function calculateRisk() {
   const weekendMult  = WEEKEND_MULTIPLIER[weekend];
 
   // 4. Normalise each multiplier to 0–100 scale for display
-  // We define reference max values based on data range
-  const AGE_MAX      = getAgeMultiplier(32); // peak risk age ~30-34
-  const GENDER_MAX   = 3.6;
-  const PROVINCE_MAX = getProvinceMultiplier("KZN"); // highest rate
+  const AGE_MAX      = getAgeMultiplier(35); // peak risk age 35-39 in 2025 data
+  const GENDER_MAX   = 3.26;
+  const PROVINCE_MAX = getProvinceMultiplier("NC"); // highest exposure-adjusted rate
   const VEHICLE_MAX  = 4.5; // motorcycle
   const KM_MAX       = 1.9;
   const WEEKEND_MAX  = 1.4;
@@ -248,15 +282,12 @@ function calculateRisk() {
 
   // 6. Risk band
   let band, bandClass;
-  if      (compositeScore < 25) { band = "Low Risk";       bandClass = "low"; }
-  else if (compositeScore < 50) { band = "Medium Risk";    bandClass = "medium"; }
-  else if (compositeScore < 75) { band = "High Risk";      bandClass = "high"; }
-  else                          { band = "Very High Risk";  bandClass = "very-high"; }
+  if      (compositeScore < 25) { band = "Low Risk";      bandClass = "low"; }
+  else if (compositeScore < 50) { band = "Medium Risk";   bandClass = "medium"; }
+  else if (compositeScore < 75) { band = "High Risk";     bandClass = "high"; }
+  else                          { band = "Very High Risk"; bandClass = "very-high"; }
 
   // 7. Premium estimate
-  // Composite risk multiplier (relative to average risk score of ~40)
-  const rawMultiplier = (ageMult * genderMult * vehicleMult * kmMult * weekendMult) /
-                        (AGE_MAX * GENDER_MAX * VEHICLE_MAX * KM_MAX * WEEKEND_MAX);
   const premiumMultiplier = 0.4 + (compositeScore / 100) * 2.2;
   const basePremium = BASE_PREMIUM[vehicle];
   const estPremium  = basePremium * premiumMultiplier;
@@ -269,12 +300,12 @@ function calculateRisk() {
     band, bandClass,
     premiumLow, premiumHigh,
     factors: [
-      { name: "Age",           score: ageScore,      value: `${age} yrs (${getAgeBand(age)})` },
-      { name: "Gender",        score: genderScore,    value: gender.charAt(0).toUpperCase() + gender.slice(1) },
-      { name: "Province",      score: provinceScore,  value: PROVINCE_NAME[province] },
-      { name: "Vehicle Type",  score: vehicleScore,   value: VEHICLE_LABEL[vehicle] },
-      { name: "Weekly km",     score: kmScore,        value: KM_LABEL[km] },
-      { name: "Weekend driving", score: weekendScore, value: weekend === "yes" ? "Yes, regularly" : weekend === "sometimes" ? "Sometimes" : "Rarely / Never" },
+      { name: "Age",             score: ageScore,      value: `${age} yrs (${getAgeBand(age)})` },
+      { name: "Gender",          score: genderScore,   value: gender.charAt(0).toUpperCase() + gender.slice(1) },
+      { name: "Province",        score: provinceScore, value: PROVINCE_NAME[province] },
+      { name: "Vehicle Type",    score: vehicleScore,  value: VEHICLE_LABEL[vehicle] },
+      { name: "Weekly km",       score: kmScore,       value: KM_LABEL[km] },
+      { name: "Weekend driving", score: weekendScore,  value: weekend === "yes" ? "Yes, regularly" : weekend === "sometimes" ? "Sometimes" : "Rarely / Never" },
     ]
   });
 }
@@ -295,7 +326,6 @@ function renderResults({ compositeScore, band, bandClass, premiumLow, premiumHig
   const offset = circumference - (compositeScore / 100) * circumference;
   setTimeout(() => {
     ring.style.strokeDashoffset = offset;
-    // Colour by band
     const colours = { low: "#2e7d52", medium: "#c17f24", high: "#b84444", "very-high": "#7b1d1d" };
     ring.style.stroke = colours[bandClass] || "#1a3c6e";
   }, 100);
@@ -310,10 +340,10 @@ function renderResults({ compositeScore, band, bandClass, premiumLow, premiumHig
   // Band breakdown text
   const breakdownEl = document.getElementById("bandBreakdown");
   const breakdownText = {
-    low:        "Your profile suggests below-average road risk based on SA fatality data. You may be eligible for competitive premiums.",
-    medium:     "Your profile is around the SA average. Standard market rates likely apply.",
-    high:       "Your profile indicates above-average risk. Expect higher premiums — shop around.",
-    "very-high":"Several high-risk factors are present. Premiums will be significantly above market average.",
+    low:         "Your profile suggests below-average road risk based on SA fatality data. You may be eligible for competitive premiums.",
+    medium:      "Your profile is around the SA average. Standard market rates likely apply.",
+    high:        "Your profile indicates above-average risk. Expect higher premiums — shop around.",
+    "very-high": "Several high-risk factors are present. Premiums will be significantly above market average.",
   };
   breakdownEl.innerHTML = `<span>${breakdownText[bandClass]}</span>`;
 
@@ -337,7 +367,7 @@ function renderResults({ compositeScore, band, bandClass, premiumLow, premiumHig
     factorList.appendChild(row);
   });
 
-  // Animate bars after render
+  // Animate bars
   setTimeout(() => {
     document.querySelectorAll(".factor-bar").forEach(bar => {
       bar.style.width = bar.dataset.width;
