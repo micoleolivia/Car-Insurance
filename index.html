@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SA Car Insurance Risk Estimator</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-mark">▣</span>
+        <span class="logo-text">RiskView <span class="logo-sub">SA</span></span>
+      </div>
+      <p class="header-tagline">Understand what drives your car insurance premium</p>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Powered by RTMC 2023 Road Safety Data</p>
+        <h1>Is your insurer charging you fairly?</h1>
+        <p class="hero-sub">Enter your details below. Our model uses real South African road fatality statistics to estimate your risk profile and what a fair premium looks like.</p>
+      </div>
+    </section>
+
+    <!-- FORM -->
+    <section class="form-section">
+      <div class="form-inner">
+
+        <div class="form-grid">
+
+          <!-- Age -->
+          <div class="field">
+            <label for="age">Your Age</label>
+            <input type="number" id="age" min="16" max="90" placeholder="e.g. 32" />
+          </div>
+
+          <!-- Gender -->
+          <div class="field">
+            <label for="gender">Gender</label>
+            <select id="gender">
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+
+          <!-- Province -->
+          <div class="field">
+            <label for="province">Province</label>
+            <select id="province">
+              <option value="">Select province</option>
+              <option value="GP">Gauteng</option>
+              <option value="KZN">KwaZulu-Natal</option>
+              <option value="WC">Western Cape</option>
+              <option value="EC">Eastern Cape</option>
+              <option value="LP">Limpopo</option>
+              <option value="MP">Mpumalanga</option>
+              <option value="NW">North West</option>
+              <option value="FS">Free State</option>
+              <option value="NC">Northern Cape</option>
+            </select>
+          </div>
+
+          <!-- Vehicle Type -->
+          <div class="field">
+            <label for="vehicle">Vehicle Type</label>
+            <select id="vehicle">
+              <option value="">Select vehicle type</option>
+              <option value="motorcar">Motorcar / Sedan</option>
+              <option value="bakkie">LDV / Bakkie</option>
+              <option value="motorcycle">Motorcycle</option>
+              <option value="minibus">Minibus / Taxi</option>
+              <option value="bus">Bus / Coach</option>
+              <option value="truck">Truck</option>
+            </select>
+          </div>
+
+          <!-- Weekly KM -->
+          <div class="field">
+            <label for="km">Weekly Kilometres Driven</label>
+            <select id="km">
+              <option value="">Select range</option>
+              <option value="low">Under 100 km</option>
+              <option value="medium">100 – 300 km</option>
+              <option value="high">300 – 600 km</option>
+              <option value="very_high">Over 600 km</option>
+            </select>
+          </div>
+
+          <!-- Weekend driving -->
+          <div class="field">
+            <label for="weekend">Do you drive on weekends?</label>
+            <select id="weekend">
+              <option value="">Select</option>
+              <option value="yes">Yes, regularly</option>
+              <option value="sometimes">Sometimes</option>
+              <option value="no">Rarely / Never</option>
+            </select>
+          </div>
+
+        </div>
+
+        <button class="cta" onclick="calculateRisk()">Calculate My Risk</button>
+
+      </div>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="results-section" id="results" style="display:none;">
+      <div class="results-inner">
+
+        <div class="results-header">
+          <h2>Your Risk Assessment</h2>
+          <p class="results-sub">Based on RTMC 2023 South African road safety statistics</p>
+        </div>
+
+        <div class="results-grid">
+
+          <!-- Score -->
+          <div class="result-card score-card">
+            <p class="card-label">Risk Score</p>
+            <div class="score-display">
+              <svg class="score-ring" viewBox="0 0 120 120">
+                <circle class="ring-bg" cx="60" cy="60" r="50" />
+                <circle class="ring-fill" id="scoreRing" cx="60" cy="60" r="50"
+                  stroke-dasharray="314"
+                  stroke-dashoffset="314" />
+              </svg>
+              <div class="score-number-wrap">
+                <span class="score-number" id="scoreNumber">--</span>
+                <span class="score-denom">/100</span>
+              </div>
+            </div>
+            <p class="score-note">Higher score = higher risk</p>
+          </div>
+
+          <!-- Band -->
+          <div class="result-card band-card">
+            <p class="card-label">Risk Band</p>
+            <div class="band-display" id="bandDisplay">
+              <span class="band-label" id="bandLabel">--</span>
+            </div>
+            <div class="band-breakdown" id="bandBreakdown"></div>
+          </div>
+
+          <!-- Premium -->
+          <div class="result-card premium-card">
+            <p class="card-label">Estimated Monthly Premium</p>
+            <div class="premium-display">
+              <span class="premium-range" id="premiumRange">--</span>
+            </div>
+            <p class="premium-note">Indicative range for comprehensive cover</p>
+          </div>
+
+        </div>
+
+        <!-- Factor breakdown -->
+        <div class="factor-section">
+          <h3>What's driving your risk?</h3>
+          <div class="factor-list" id="factorList"></div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+          <p><strong>Methodology:</strong> Risk factors are derived from the RTMC State of Road Safety Report 2023. Age and province factors reflect fatality distributions adjusted for population exposure. Gender factor reflects the 76.5% male / 19.6% female fatality split. Vehicle factors are based on registered vehicle population proportions. Premium estimates are indicative only and are not a quote. Actual premiums vary by insurer.</p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p>Data source: Road Traffic Management Corporation (RTMC), <em>State of Road Safety in South Africa, January–December 2023.</em></p>
+      <p>Built as an actuarial portfolio project. Not a licensed insurance product.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+
+</body>
+</html>
